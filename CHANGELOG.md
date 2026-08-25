@@ -88,6 +88,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Makefile now uses dynamic versioning instead of hardcoded version
 
 ### Fixed
+- **Doubled timeout on modifying operations**
+  - CSRF token fetch and the actual request each got the full HTTP timeout, so a
+    hanging service made the caller wait 2x the timeout (60s with the 30s default)
+  - Both now share one deadline per operation, so an error surfaces after 1x the timeout
+  - New `--timeout <seconds>` flag (default 30) to tune it per service
 - **SAP OData multi-schema metadata parsing** (Issue #12, Document 005)
   - Parser now handles multiple Schema elements in EDMX metadata
   - EntityTypes stored with qualified names (Namespace.TypeName)

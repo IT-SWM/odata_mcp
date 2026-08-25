@@ -19,6 +19,9 @@ import (
 
 // GetEntitySet retrieves entities from an entity set
 func (c *ODataClient) GetEntitySet(ctx context.Context, entitySet string, options map[string]string) (*models.ODataResponse, error) {
+	ctx, cancel := c.opCtx(ctx)
+	defer cancel()
+
 	endpoint := entitySet
 
 	// Build query parameters with standard OData v2 parameters
@@ -75,6 +78,9 @@ func (c *ODataClient) GetEntitySet(ctx context.Context, entitySet string, option
 
 // GetEntity retrieves a single entity by key
 func (c *ODataClient) GetEntity(ctx context.Context, entitySet string, key map[string]interface{}, options map[string]string) (*models.ODataResponse, error) {
+	ctx, cancel := c.opCtx(ctx)
+	defer cancel()
+
 	// Build key predicate
 	keyPredicate := c.buildKeyPredicate(key)
 	endpoint := fmt.Sprintf("%s(%s)", entitySet, keyPredicate)
@@ -108,6 +114,9 @@ func (c *ODataClient) GetEntity(ctx context.Context, entitySet string, key map[s
 
 // CreateEntity creates a new entity
 func (c *ODataClient) CreateEntity(ctx context.Context, entitySet string, data map[string]interface{}) (*models.ODataResponse, error) {
+	ctx, cancel := c.opCtx(ctx)
+	defer cancel()
+
 	// Always fetch a fresh CSRF token for modifying operations (Python behavior)
 	if err := c.fetchCSRFToken(ctx); err != nil {
 		if c.verbose {
@@ -145,6 +154,9 @@ func (c *ODataClient) CreateEntity(ctx context.Context, entitySet string, data m
 
 // UpdateEntity updates an existing entity
 func (c *ODataClient) UpdateEntity(ctx context.Context, entitySet string, key map[string]interface{}, data map[string]interface{}, method string) (*models.ODataResponse, error) {
+	ctx, cancel := c.opCtx(ctx)
+	defer cancel()
+
 	// Always fetch a fresh CSRF token for modifying operations (Python behavior)
 	if err := c.fetchCSRFToken(ctx); err != nil {
 		if c.verbose {
@@ -189,6 +201,9 @@ func (c *ODataClient) UpdateEntity(ctx context.Context, entitySet string, key ma
 
 // DeleteEntity deletes an entity
 func (c *ODataClient) DeleteEntity(ctx context.Context, entitySet string, key map[string]interface{}) (*models.ODataResponse, error) {
+	ctx, cancel := c.opCtx(ctx)
+	defer cancel()
+
 	// Always fetch a fresh CSRF token for modifying operations (Python behavior)
 	if err := c.fetchCSRFToken(ctx); err != nil {
 		if c.verbose {
@@ -216,6 +231,9 @@ func (c *ODataClient) DeleteEntity(ctx context.Context, entitySet string, key ma
 
 // CallFunction calls a function import
 func (c *ODataClient) CallFunction(ctx context.Context, functionName string, parameters map[string]interface{}, method string) (*models.ODataResponse, error) {
+	ctx, cancel := c.opCtx(ctx)
+	defer cancel()
+
 	endpoint := functionName
 
 	var req *http.Request

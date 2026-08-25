@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/zmcp/odata-mcp/internal/client"
 	"github.com/zmcp/odata-mcp/internal/config"
@@ -37,6 +38,7 @@ type ODataMCPBridge struct {
 func NewODataMCPBridge(cfg *config.Config) (*ODataMCPBridge, error) {
 	// Create OData client
 	odataClient := client.NewODataClient(cfg.ServiceURL, cfg.Verbose)
+	odataClient.SetTimeout(time.Duration(cfg.Timeout) * time.Second)
 
 	// Configure authentication
 	if cfg.HasBasicAuth() {

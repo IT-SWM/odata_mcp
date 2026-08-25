@@ -45,6 +45,9 @@ type Config struct {
 	VerboseErrors    bool `mapstructure:"verbose_errors"`    // Detailed error context
 	ResponseMetadata bool `mapstructure:"response_metadata"` // Include __metadata in responses
 
+	// Network
+	Timeout int `mapstructure:"timeout"` // Per-operation timeout in seconds
+
 	// Response size limits
 	MaxResponseSize int `mapstructure:"max_response_size"` // Maximum response size in bytes
 	MaxItems        int `mapstructure:"max_items"`         // Maximum number of items in response

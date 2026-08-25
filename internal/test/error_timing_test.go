@@ -160,3 +160,33 @@ func stringToLower(s string) string {
 	}
 	return string(b)
 }
+
+// TestModifyingOperationTimeoutIsNotDoubled verifies that the CSRF token fetch and
+// the actual request share one deadline. Previously each got the full HTTP client
+// timeout, so a hanging service made the caller wait 2x the timeout (e.g. 60s).
+func TestModifyingOperationTimeoutIsNotDoubled(t *testing.T) {
+	shutdown := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done(): // client gave up
+		case <-shutdown: // test is over, let Close() proceed
+		}
+	}))
+	defer server.Close()      // runs second
+	defer close(shutdown)     // runs first, unblocks the handlers
+
+	odataClient := client.NewODataClient(server.URL, false)
+	odataClient.SetTimeout(1 * time.Second)
+
+	start := time.Now()
+	_, err := odataClient.CreateEntity(context.Background(), "Products", map[string]interface{}{"ID": 1})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected a timeout error")
+	}
+	if elapsed > 1500*time.Millisecond {
+		t.Errorf("operation took %v, expected ~1s (CSRF fetch and request must share one deadline)", elapsed)
+	}
+	t.Logf("timed out after %v: %v", elapsed, err)
+}

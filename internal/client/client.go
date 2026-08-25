@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ type ODataClient struct {
 	verbose        bool
 	sessionCookies []*http.Cookie // Track session cookies from server
 	isV4           bool           // Whether the service is OData v4
+	timeout        time.Duration  // Budget for one whole operation (incl. CSRF fetch)
 }
 
 // NewODataClient creates a new OData client
@@ -36,14 +38,32 @@ func NewODataClient(baseURL string, verbose bool) *ODataClient {
 		baseURL += "/"
 	}
 
+	timeout := time.Duration(constants.DefaultTimeout) * time.Second
 	return &ODataClient{
 		baseURL: baseURL,
 		httpClient: &http.Client{
-			Timeout: time.Duration(constants.DefaultTimeout) * time.Second,
+			Timeout: timeout,
 		},
 		verbose: verbose,
 		isV4:    false, // Will be determined when fetching metadata
+		timeout: timeout,
 	}
+}
+
+// SetTimeout sets the budget for a single operation. A modifying operation
+// fetches a CSRF token first, so without a shared deadline the caller would
+// wait 2x the timeout before seeing an error.
+func (c *ODataClient) SetTimeout(d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	c.timeout = d
+	c.httpClient.Timeout = d
+}
+
+// opCtx bounds one whole operation (CSRF token fetch + actual request).
+func (c *ODataClient) opCtx(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, c.timeout)
 }
 
 // SetBasicAuth configures basic authentication

@@ -19,6 +19,7 @@ import (
 
 	"github.com/zmcp/odata-mcp/internal/bridge"
 	"github.com/zmcp/odata-mcp/internal/config"
+	"github.com/zmcp/odata-mcp/internal/constants"
 	"github.com/zmcp/odata-mcp/internal/debug"
 	"github.com/zmcp/odata-mcp/internal/transport"
 	"github.com/zmcp/odata-mcp/internal/transport/http"
@@ -75,6 +76,8 @@ func init() {
 	// Entity and function filtering
 	rootCmd.Flags().StringVar(&cfg.Entities, "entities", "", "Comma-separated list of entities to generate tools for (e.g., 'Products,Categories,Orders'). Supports wildcards: 'Product*,Order*'")
 	rootCmd.Flags().StringVar(&cfg.Functions, "functions", "", "Comma-separated list of function imports to generate tools for (e.g., 'GetProducts,CreateOrder'). Supports wildcards: 'Get*,Create*'")
+
+	rootCmd.Flags().IntVar(&cfg.Timeout, "timeout", constants.DefaultTimeout, "Timeout in seconds for a single OData operation")
 
 	// Output and debugging options
 	rootCmd.Flags().BoolVarP(&cfg.Verbose, "verbose", "v", false, "Enable verbose output to stderr")
