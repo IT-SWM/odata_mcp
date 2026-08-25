@@ -29,19 +29,19 @@ func (b *ODataMCPBridge) generateUniversalTool() {
 			"properties": map[string]any{
 				"action": map[string]any{
 					"type":        "string",
-					"description": "Operation: list|get|create|update|delete|count|search|call",
-					"enum":        []string{"list", "get", "create", "update", "delete", "count", "search", "call"},
+					"description": "Operation: list|get|create|update|delete|count|search|call|service_info",
+					"enum":        []string{"list", "get", "create", "update", "delete", "count", "search", "call", "service_info"},
 				},
 				"target": map[string]any{
 					"type":        "string",
-					"description": "Entity set name (e.g., 'Products') or function name",
+					"description": "Entity set name (e.g., 'Products') or function name. Not needed for service_info",
 				},
 				"params": map[string]any{
 					"type":        "object",
 					"description": "Action-specific parameters (filter, select, expand, orderby, top, skip, key, data, method)",
 				},
 			},
-			"required": []string{"action", "target"},
+			"required": []string{"action"},
 		},
 	}
 
@@ -151,9 +151,14 @@ func (b *ODataMCPBridge) handleUniversalTool(ctx context.Context, args map[strin
 		return nil, fmt.Errorf("missing required parameter: action")
 	}
 
+	// service_info describes the service itself, so it takes no target
+	if action == "service_info" {
+		return b.handleUniversalServiceInfo()
+	}
+
 	target, ok := args["target"].(string)
 	if !ok {
-		return nil, fmt.Errorf("missing required parameter: target")
+		return nil, fmt.Errorf("missing required parameter: target (action %q)", action)
 	}
 
 	// Get params (optional)
@@ -290,7 +295,7 @@ func (b *ODataMCPBridge) handleUniversalTool(ctx context.Context, args map[strin
 		return b.handleFunctionCall(ctx, target, function, params)
 
 	default:
-		return nil, fmt.Errorf("unknown action: %s (valid: list, get, create, update, delete, count, search, call)", action)
+		return nil, fmt.Errorf("unknown action: %s (valid: list, get, create, update, delete, count, search, call, service_info)", action)
 	}
 }
 

@@ -88,6 +88,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Makefile now uses dynamic versioning instead of hardcoded version
 
 ### Fixed
+- **`service_info` was unreachable in universal mode**
+  - The handler existed but was never wired into the action switch, and the
+    action was missing from the schema enum
+  - It also tripped over the mandatory `target`, which it does not need;
+    `target` is now validated per action and the error names the action
 - **Search against OData v2 services always failed**
   - `$search` is v4 syntax; SAP Gateway v2 rejects it with HTTP 400
     "Ungueltige Systemabfrageoption angegeben"
