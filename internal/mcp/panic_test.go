@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -28,5 +29,22 @@ func TestPanickingToolHandlerReturnsError(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(msg.Error.Message+string(msg.Error.Data)), "panic") {
 		t.Logf("error response: %+v", msg.Error)
+	}
+}
+
+// Error text routinely contains quotes (a URL, a parameter name). Quoting it by
+// hand produced a broken json.RawMessage: encoding failed, nothing was written,
+// and the client waited out its own timeout on an empty 200.
+func TestErrorResponseWithQuotesEncodes(t *testing.T) {
+	s := NewServer("test", "0")
+	msg := s.createErrorResponse(json.RawMessage("1"), -32603, "Internal error",
+		`Get "http://sap/Suppliers?$search=x": context deadline exceeded`)
+
+	out, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("error response does not encode: %v", err)
+	}
+	if !strings.Contains(string(out), "deadline exceeded") {
+		t.Errorf("error detail lost: %s", out)
 	}
 }

@@ -167,7 +167,14 @@ func (t *StreamableHTTPTransport) handleMCP(w http.ResponseWriter, r *http.Reque
 		// Regular JSON response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
-			fmt.Printf("Error encoding response: %v\n", err)
+			// Encode writes nothing when it fails, so without a fallback the
+			// client gets an empty 200 and waits out its own timeout.
+			log.Printf("failed to encode response: %v", err)
+			id := string(msg.ID)
+			if id == "" || id == "null" {
+				id = "0"
+			}
+			fmt.Fprintf(w, `{"jsonrpc":"2.0","id":%s,"error":{"code":-32603,"message":"failed to encode response"}}`, id)
 		}
 	}
 }
@@ -205,6 +212,13 @@ func (t *StreamableHTTPTransport) shouldUpgradeToStream(request, response *trans
 
 	return false
 }
+
+// sseEncodeFailure is the last resort when a response cannot be encoded: a
+// valid event beats an empty stream the client has to time out on.
+const sseEncodeFailure = `event: message
+data: {"jsonrpc":"2.0","id":0,"error":{"code":-32603,"message":"failed to encode response"}}
+
+`
 
 // upgradeToSSE upgrades the connection to Server-Sent Events
 func (t *StreamableHTTPTransport) upgradeToSSE(w http.ResponseWriter, r *http.Request, initialResponse *transport.Message, lastEventID string) {
@@ -249,7 +263,11 @@ func (t *StreamableHTTPTransport) upgradeToSSE(w http.ResponseWriter, r *http.Re
 	// Send initial response as first event
 	if initialResponse != nil {
 		if err := t.sendSSEMessage(stream, "message", initialResponse); err != nil {
+			// Nothing was written, so send something valid rather than leaving
+			// the client staring at an empty stream until it times out.
 			log.Printf("upgradeToSSE: failed to send initial response: %v", err)
+			io.WriteString(w, sseEncodeFailure)
+			flusher.Flush()
 		}
 	}
 

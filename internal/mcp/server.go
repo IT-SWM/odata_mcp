@@ -212,13 +212,21 @@ func (s *Server) createErrorResponse(id interface{}, code int, message, data str
 		idBytes, _ = json.Marshal(id)
 	}
 
+	// Marshal the data instead of quoting it by hand: error text routinely
+	// contains quotes (a URL, a parameter name), which produced a broken
+	// RawMessage that failed to encode -- leaving the client with no response.
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		dataBytes = json.RawMessage(`""`)
+	}
+
 	return &transport.Message{
 		JSONRPC: "2.0",
 		ID:      idBytes,
 		Error: &transport.Error{
 			Code:    code,
 			Message: message,
-			Data:    json.RawMessage(fmt.Sprintf(`"%s"`, data)),
+			Data:    dataBytes,
 		},
 	}
 }

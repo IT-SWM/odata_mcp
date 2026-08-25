@@ -88,6 +88,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Makefile now uses dynamic versioning instead of hardcoded version
 
 ### Fixed
+- **Error responses were built as invalid JSON and silently dropped**
+  - The `data` field was quoted by hand (`fmt.Sprintf("\"%s\"", data)`), so any
+    error text containing a quote -- a URL, a parameter name -- produced a broken
+    `json.RawMessage`
+  - Encoding then failed *before* writing anything: the client got an empty
+    `200` with `Content-Length: 0` and waited out its own timeout
+  - Combined with the SSE bug below this is what turned a plain 30s OData
+    timeout into a 180s hang ending in `context canceled`
+  - The data field is now marshalled, and both response paths fall back to a
+    valid error instead of writing nothing
 - **Every `tools/call` over streamable HTTP hung until the client gave up**
   - The response was sent as an SSE event, then the handler blocked in a
     keep-alive loop that only ended when the client cancelled -- nothing ever
