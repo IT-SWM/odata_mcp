@@ -54,6 +54,12 @@ func (c *ODataClient) GetEntitySet(ctx context.Context, entitySet string, option
 				// Skip adding $inlinecount for v4
 				continue
 			}
+			// $search is v4 syntax. SAP Gateway v2 rejects it as an invalid
+			// system query option; free-text search there is plain `search`.
+			if !c.isV4 && key == constants.QuerySearch {
+				params.Set(constants.SAPQuerySearch, value)
+				continue
+			}
 			params.Set(key, value) // Use Set to override defaults if needed
 		}
 	}

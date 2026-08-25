@@ -88,6 +88,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Makefile now uses dynamic versioning instead of hardcoded version
 
 ### Fixed
+- **Search against OData v2 services always failed**
+  - `$search` is v4 syntax; SAP Gateway v2 rejects it with HTTP 400
+    "Ungueltige Systemabfrageoption angegeben"
+  - v2 services now get plain `search`, v4 keeps `$search`
 - **Error responses were built as invalid JSON and silently dropped**
   - The `data` field was quoted by hand (`fmt.Sprintf("\"%s\"", data)`), so any
     error text containing a quote -- a URL, a parameter name -- produced a broken
