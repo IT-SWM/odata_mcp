@@ -17,7 +17,10 @@ import (
 // generateUniversalTool creates a single universal OData tool
 // This is used when --universal flag is set to reduce tool count for large services
 func (b *ODataMCPBridge) generateUniversalTool() {
-	toolName := b.formatToolName("OData", "")
+	// ponytail: fester Name statt formatToolName - in universal mode gibt es nur
+	// dieses eine Tool, ein Service-Postfix macht es nur unlesbar.
+	// (kein Leerzeichen: MCP-Toolnamen muessen [a-zA-Z0-9_-] sein)
+	toolName := "QueryOData"
 
 	description := b.generateUniversalDescription()
 
