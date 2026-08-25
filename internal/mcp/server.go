@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -304,6 +306,20 @@ func (s *Server) handleToolsListV2(req *Request) (*transport.Message, error) {
 	return s.createResponse(req.ID, result)
 }
 
+// callTool runs a tool handler and turns a panic into an error. Without this a
+// panic kills the process, and a client behind an MCP proxy sees no response at
+// all -- it waits out its own timeout and reports a bare cancellation.
+func callTool(ctx context.Context, handler ToolHandler, params map[string]interface{}) (result interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("tool handler panicked: %v", r)
+			fmt.Fprintln(os.Stderr, "[PANIC]", r)
+			debug.PrintStack()
+		}
+	}()
+	return handler(ctx, params)
+}
+
 // handleToolsCallV2 handles the tools/call request for transport
 func (s *Server) handleToolsCallV2(req *Request) (*transport.Message, error) {
 	params, ok := req.Params["arguments"].(map[string]interface{})
@@ -331,7 +347,7 @@ func (s *Server) handleToolsCallV2(req *Request) (*transport.Message, error) {
 		handlerCtx = s.ctx
 	}
 
-	result, err := handler(handlerCtx, params)
+	result, err := callTool(handlerCtx, handler, params)
 	if err != nil {
 		// Map OData errors to appropriate MCP error codes and provide detailed context
 		errorCode, errorMessage, errorData := s.categorizeError(err, name)

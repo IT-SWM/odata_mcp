@@ -88,6 +88,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Makefile now uses dynamic versioning instead of hardcoded version
 
 ### Fixed
+- **Every `tools/call` over streamable HTTP hung until the client gave up**
+  - The response was sent as an SSE event, then the handler blocked in a
+    keep-alive loop that only ended when the client cancelled -- nothing ever
+    pushes further events into a POST stream
+  - Clients waited out their own timeout and reported a bare cancellation
+    (e.g. 180s, then `context canceled`), even for calls that never touch OData
+  - The stream is now closed once the response is written
+- **A panicking tool handler killed the process**
+  - No `recover()` anywhere, so a panic left clients with no response at all
+  - Panics are now returned as a JSON-RPC error and logged to stderr
 - **Doubled timeout on modifying operations**
   - CSRF token fetch and the actual request each got the full HTTP timeout, so a
     hanging service made the caller wait 2x the timeout (60s with the 30s default)

@@ -264,27 +264,10 @@ func (t *StreamableHTTPTransport) upgradeToSSE(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	// Keep connection alive with periodic pings
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			// Send ping to keep connection alive
-			if _, err := fmt.Fprintf(w, ":ping\n\n"); err != nil {
-				return
-			}
-			flusher.Flush()
-			stream.lastSeen = time.Now()
-
-		case <-stream.done:
-			return
-
-		case <-r.Context().Done():
-			return
-		}
-	}
+	// One request, one response: close the stream instead of holding the
+	// connection open. Nothing ever pushes further events into a POST stream,
+	// so a client would otherwise wait out its own timeout after the answer
+	// already arrived.
 }
 
 // sendSSEMessage sends a message in SSE format

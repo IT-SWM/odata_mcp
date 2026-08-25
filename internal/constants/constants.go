@@ -161,7 +161,7 @@ const (
 const (
 	MCPProtocolVersion = "2024-11-05"
 	MCPServerName      = "odata-mcp-bridge"
-	MCPServerVersion   = "1.5.2"
+	MCPServerVersion   = "1.5.3"
 )
 
 // GetGoType returns the Go type for an OData type
