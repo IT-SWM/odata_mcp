@@ -20,7 +20,7 @@ func (b *ODataMCPBridge) generateUniversalTool() {
 	// ponytail: fester Name statt formatToolName - in universal mode gibt es nur
 	// dieses eine Tool, ein Service-Postfix macht es nur unlesbar.
 	// (kein Leerzeichen: MCP-Toolnamen muessen [a-zA-Z0-9_-] sein)
-	toolName := "QueryOData"
+	toolName := "Query_OData"
 
 	description := b.generateUniversalDescription()
 

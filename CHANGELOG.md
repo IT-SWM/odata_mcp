@@ -76,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite for v4 functionality
 
 ### Changed
-- **Universal tool is now named `QueryOData`**
+- **Universal tool is now named `Query_OData`**
   - The name no longer carries a service-derived suffix (was e.g.
     `OData_for_C_PURCHA`); in universal mode there is only this one tool
   - Clients referring to the old name by hand need updating
