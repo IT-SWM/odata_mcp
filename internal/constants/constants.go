@@ -80,6 +80,12 @@ const (
 	UserAgent     = "User-Agent"
 	IfMatch       = "If-Match"
 	IfNoneMatch   = "If-None-Match"
+
+	// HeaderUsername/HeaderPassword let an MCP client that cannot build a
+	// Basic Authorization header (e.g. Obot) send credentials as two plain
+	// headers instead.
+	HeaderUsername = "X-OData-Username"
+	HeaderPassword = "X-OData-Password"
 )
 
 // Content types
@@ -161,7 +167,7 @@ const (
 const (
 	MCPProtocolVersion = "2024-11-05"
 	MCPServerName      = "odata-mcp-bridge"
-	MCPServerVersion   = "1.5.8"
+	MCPServerVersion   = "1.5.9"
 )
 
 // GetGoType returns the Go type for an OData type

@@ -734,10 +734,49 @@ The OData MCP bridge includes a flexible hint system to provide guidance for ser
 | Variable | Description |
 |----------|-------------|
 | `ODATA_SERVICE_URL` or `ODATA_URL` | OData service URL |
-| `ODATA_USERNAME` or `ODATA_USER` | Username for basic auth |
-| `ODATA_PASSWORD` or `ODATA_PASS` | Password for basic auth |
+| `ODATA_USERNAME` or `ODATA_USER` | Username for basic auth (fallback when no `Authorization` header is forwarded) |
+| `ODATA_PASSWORD` or `ODATA_PASS` | Password for basic auth (fallback when no `Authorization` header is forwarded) |
 | `ODATA_COOKIE_FILE` | Path to cookie file |
 | `ODATA_COOKIE_STRING` | Cookie string |
+
+### Per-User Authentication
+
+By default every request reaches the OData service as the one account in
+`ODATA_USERNAME`/`ODATA_PASSWORD`. To have each MCP caller authenticate as
+*themselves* - so the service applies their own authorizations and records
+their name in change logs - run the bridge over Streamable HTTP with
+`--forward-mcp-headers`:
+
+```bash
+odata-mcp --transport streamable-http --forward-mcp-headers https://my-service.com/odata/
+```
+
+Each MCP client then sends its own `Authorization` header on the MCP HTTP
+connection, and the bridge passes it through to the OData service. A forwarded
+`Authorization` header always wins over the configured credentials.
+
+`ODATA_USERNAME`/`ODATA_PASSWORD` remain useful in this setup as a **fallback**:
+the bridge fetches `$metadata` at startup, before any caller exists, so it needs
+an account of its own for that. A minimally authorized technical user is enough.
+
+CSRF tokens and session cookies are tracked per identity, so one user's SAP
+session is never sent along with another user's request.
+
+Notes:
+
+- This requires `--transport streamable-http`. Under `stdio` there are no HTTP
+  headers to forward, and the SSE transport does not forward them either.
+- The bridge has no user management of its own - the header has to come from
+  the MCP client.
+- Run behind TLS and with `--mcp-token`, otherwise user credentials cross the
+  network in the clear.
+- If your MCP clients cannot set their own headers, the alternative that needs
+  no configuration change is one container per user, each with its own
+  `ODATA_USERNAME`/`ODATA_PASSWORD`.
+- If your MCP client can set headers but can't build a Basic `Authorization`
+  header itself (e.g. Obot), send `X-OData-Username` and `X-OData-Password`
+  instead - the bridge turns them into Basic auth and strips both headers
+  before the request goes to the OData service.
 
 ### .env File Support
 

@@ -50,9 +50,27 @@ func (c *ODataClient) buildRequest(ctx context.Context, method, endpoint string,
 		}
 	}
 
-	// Set authentication from configuration (will override context headers if both exist)
-	// This maintains backward compatibility with existing config-based auth
-	if c.username != "" && c.password != "" {
+	// Some MCP clients (e.g. Obot) can't build a Basic Authorization header
+	// themselves, so let them send plain username/password headers instead.
+	// Consumed and stripped so the raw password never reaches the OData
+	// service as a literal header.
+	if req.Header.Get(constants.Authorization) == "" {
+		if user := req.Header.Get(constants.HeaderUsername); user != "" {
+			req.SetBasicAuth(user, req.Header.Get(constants.HeaderPassword))
+			req.Header.Del(constants.HeaderUsername)
+			req.Header.Del(constants.HeaderPassword)
+			if c.verbose {
+				fmt.Fprintf(os.Stderr, "[VERBOSE] Built basic auth from %s/%s headers\n", constants.HeaderUsername, constants.HeaderPassword)
+			}
+		}
+	}
+
+	// Set authentication from configuration. This is a fallback, not an override:
+	// an Authorization header forwarded from the MCP connection identifies the
+	// actual end user, so it has to win over the configured service account
+	// (which then only covers requests made without a caller, e.g. the metadata
+	// fetch at startup).
+	if req.Header.Get(constants.Authorization) == "" && c.username != "" && c.password != "" {
 		req.SetBasicAuth(c.username, c.password)
 		if c.verbose {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Using configured basic auth\n")
@@ -67,17 +85,21 @@ func (c *ODataClient) buildRequest(ctx context.Context, method, endpoint string,
 		})
 	}
 
-	// Add session cookies received from server
-	for _, cookie := range c.sessionCookies {
+	// Everything below belongs to the identity this request authenticates as,
+	// so it is looked up after the Authorization header has been settled.
+	key := sessionKey(req)
+
+	// Add session cookies received from server for this identity
+	for _, cookie := range c.sessionCookiesFor(key) {
 		req.AddCookie(cookie)
 	}
 
 	// Set CSRF token if available
-	if c.csrfToken != "" {
-		req.Header.Set(constants.CSRFTokenHeader, c.csrfToken)
+	if token := c.csrfTokenFor(key); token != "" {
+		req.Header.Set(constants.CSRFTokenHeader, token)
 		if c.verbose {
 			// Show first 20 chars of token like Python does
-			tokenPreview := c.csrfToken
+			tokenPreview := token
 			if len(tokenPreview) > 20 {
 				tokenPreview = tokenPreview[:20] + "..."
 			}
@@ -147,8 +169,9 @@ func (c *ODataClient) doRequestWithRetry(req *http.Request, bodyBytes []byte, is
 				fmt.Fprintf(os.Stderr, "[VERBOSE] CSRF token validation failed, attempting to refetch...\n")
 			}
 
-			// Clear the invalid token
-			c.csrfToken = ""
+			// Clear the invalid token for this identity only
+			key := sessionKey(req)
+			c.setCSRFToken(key, "")
 
 			// Try to fetch new CSRF token
 			if err := c.fetchCSRFToken(req.Context()); err != nil {
@@ -157,7 +180,7 @@ func (c *ODataClient) doRequestWithRetry(req *http.Request, bodyBytes []byte, is
 			}
 
 			// Retry original request with new CSRF token
-			req.Header.Set(constants.CSRFTokenHeader, c.csrfToken)
+			req.Header.Set(constants.CSRFTokenHeader, c.csrfTokenFor(key))
 			if c.verbose {
 				fmt.Fprintf(os.Stderr, "[VERBOSE] Retrying request with new CSRF token...\n")
 			}
@@ -177,14 +200,17 @@ func (c *ODataClient) fetchCSRFToken(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, "[VERBOSE] Fetching CSRF token...\n")
 	}
 
-	// Clear any existing CSRF token (Python behavior)
-	c.csrfToken = ""
-
 	// Use service root for CSRF token fetching (more reliable than empty string)
 	req, err := c.buildRequest(ctx, constants.GET, "", nil)
 	if err != nil {
 		return err
 	}
+
+	// The token belongs to whichever login this request authenticates as.
+	key := sessionKey(req)
+
+	// Clear any existing CSRF token (Python behavior)
+	c.setCSRFToken(key, "")
 
 	req.Header.Set(constants.CSRFTokenHeader, constants.CSRFTokenFetch)
 
@@ -202,7 +228,7 @@ func (c *ODataClient) fetchCSRFToken(ctx context.Context) error {
 
 	// Store any session cookies from the response
 	if cookies := resp.Cookies(); len(cookies) > 0 {
-		c.sessionCookies = append(c.sessionCookies, cookies...)
+		c.addSessionCookies(key, cookies)
 		if c.verbose {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Received %d session cookies during token fetch\n", len(cookies))
 			for _, cookie := range cookies {
@@ -234,7 +260,7 @@ func (c *ODataClient) fetchCSRFToken(ctx context.Context) error {
 		return fmt.Errorf("CSRF token not found in response headers")
 	}
 
-	c.csrfToken = token
+	c.setCSRFToken(key, token)
 	if c.verbose {
 		fmt.Fprintf(os.Stderr, "[VERBOSE] CSRF token fetched successfully: %s...\n", token[:min(len(token), 20)])
 	}
