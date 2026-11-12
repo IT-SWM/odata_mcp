@@ -66,7 +66,7 @@ func (t *SSETransport) Start(ctx context.Context) error {
 	// This transport never forwards headers, so a Bearer token is fine here.
 	t.server = &http.Server{
 		Addr:    t.security.Addr,
-		Handler: RequireToken(t.security.Token, true, mux),
+		Handler: RequireToken(t.security, true, mux),
 	}
 
 	// Start message processor

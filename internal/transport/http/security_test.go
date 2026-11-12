@@ -65,6 +65,19 @@ func TestValidateHTTPSecurity(t *testing.T) {
 			errContains: "mcp-token required",
 		},
 
+		// --no-mcp-token: explicit opt-out, allowed; conflicts with a token
+		{
+			name:    "all interfaces with --no-mcp-token - allowed",
+			config:  SecurityConfig{Addr: "0.0.0.0:8080", AllowAllInterfaces: true, NoToken: true},
+			wantErr: false,
+		},
+		{
+			name:        "--no-mcp-token together with a token - rejected",
+			config:      SecurityConfig{Addr: "localhost:8080", Token: "secret-token", NoToken: true},
+			wantErr:     true,
+			errContains: "mutually exclusive",
+		},
+
 		// Non-localhost with token but no TLS - allowed, a proxy terminates TLS
 		{
 			name: "192.168.1.100:8080 with token but no TLS - allowed",
@@ -204,6 +217,12 @@ func TestRequireToken(t *testing.T) {
 		{"health stays open", "secret", true, "/health", nil, http.StatusOK},
 	}
 
+	t.Run("no-mcp-token lets requests through", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		RequireToken(SecurityConfig{NoToken: true}, true, ok).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/mcp", nil))
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
@@ -211,7 +230,7 @@ func TestRequireToken(t *testing.T) {
 				req.Header.Set(k, v)
 			}
 			rec := httptest.NewRecorder()
-			RequireToken(tt.token, tt.acceptBearer, ok).ServeHTTP(rec, req)
+			RequireToken(SecurityConfig{Token: tt.token}, tt.acceptBearer, ok).ServeHTTP(rec, req)
 			assert.Equal(t, tt.want, rec.Code)
 		})
 	}

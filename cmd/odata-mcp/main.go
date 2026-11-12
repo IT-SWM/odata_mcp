@@ -109,10 +109,11 @@ func init() {
 	// Security options for HTTP transport
 	rootCmd.Flags().String("mcp-token", "", "Token for MCP authentication (required for HTTP transport); clients send it as X-MCP-Token header (or Authorization: Bearer without --forward-mcp-headers)")
 	rootCmd.Flags().String("mcp-token-file", "", "Path to file containing MCP token (avoids token in CLI history)")
+	rootCmd.Flags().Bool("no-mcp-token", false, "Run HTTP transport without a token - only where the port is reachable from trusted clients alone (e.g. a private Docker network)")
 	rootCmd.Flags().Bool("tls", false, "Serve HTTPS (needs --tls-cert and --tls-key); without it a proxy in front must terminate TLS")
 	rootCmd.Flags().String("tls-cert", "", "Path to TLS certificate file")
 	rootCmd.Flags().String("tls-key", "", "Path to TLS private key file")
-	rootCmd.Flags().Bool("allow-all-interfaces", false, "Allow binding to all interfaces (0.0.0.0/::) - requires --mcp-token")
+	rootCmd.Flags().Bool("allow-all-interfaces", false, "Allow binding to all interfaces (0.0.0.0/::)")
 
 	// Debug options
 	rootCmd.Flags().Bool("trace-mcp", false, "Enable trace logging to debug MCP communication")
@@ -125,8 +126,10 @@ func init() {
 	rootCmd.Flags().StringVar(&cfg.EnableOps, "enable", "", "Enable only specified operation types (C=create, S=search, F=filter, G=get, U=update, D=delete, A=action, R=read expands to SFG)")
 	rootCmd.Flags().StringVar(&cfg.DisableOps, "disable", "", "Disable specified operation types (C=create, S=search, F=filter, G=get, U=update, D=delete, A=action, R=read expands to SFG)")
 
-	// Claude Code compatibility
-	rootCmd.Flags().BoolVarP(&cfg.ClaudeCodeFriendly, "claude-code-friendly", "c", false, "Remove $ prefix from OData parameters for Claude Code CLI compatibility")
+	// Parameters are always exposed without the $ prefix now. The flag stays as a
+	// hidden no-op so existing configs that still pass it keep starting.
+	rootCmd.Flags().BoolP("claude-code-friendly", "c", false, "")
+	_ = rootCmd.Flags().MarkDeprecated("claude-code-friendly", "parameters are always Claude-friendly now; drop the flag")
 
 	// Protocol version override (for AI Foundry compatibility)
 	rootCmd.Flags().StringVar(&cfg.ProtocolVersion, "protocol-version", "", "Override MCP protocol version (e.g., '2025-06-18' for AI Foundry)")
@@ -370,6 +373,7 @@ func buildSecurityConfig(cmd *cobra.Command) (http.SecurityConfig, error) {
 	tlsCert, _ := cmd.Flags().GetString("tls-cert")
 	tlsKey, _ := cmd.Flags().GetString("tls-key")
 	allowAllInterfaces, _ := cmd.Flags().GetBool("allow-all-interfaces")
+	noToken, _ := cmd.Flags().GetBool("no-mcp-token")
 
 	// Load token from file if specified
 	if tokenFile != "" && token == "" {
@@ -387,6 +391,7 @@ func buildSecurityConfig(cmd *cobra.Command) (http.SecurityConfig, error) {
 		TLSCert:            tlsCert,
 		TLSKey:             tlsKey,
 		AllowAllInterfaces: allowAllInterfaces,
+		NoToken:            noToken,
 	}, nil
 }
 
@@ -417,6 +422,9 @@ func validateHTTPTransport(securityCfg http.SecurityConfig) error {
 			fmt.Fprintf(os.Stderr, "TLS: off - a proxy in front must terminate TLS, or tokens and passwords cross the network in clear text\n")
 		}
 		fmt.Fprintf(os.Stderr, "Token: %s\n\n", maskToken(securityCfg.Token))
+	}
+	if securityCfg.NoToken {
+		fmt.Fprintf(os.Stderr, "⚠️  --no-mcp-token: anyone who reaches %s can use this server\n", securityCfg.Addr)
 	}
 
 	return nil

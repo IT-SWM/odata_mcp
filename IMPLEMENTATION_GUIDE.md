@@ -350,7 +350,7 @@ Add custom response processing:
 
 ### 11.2 Common Issues
 1. **CSRF Token Failures**: Check SAP service configuration
-2. **Tool Validation Errors**: Use `--claude-code-friendly` for strict clients
+2. **Tool Validation Errors**: Parameter names carry no `$` prefix, so strict clients accept them
 3. **Authentication Issues**: Verify credentials and formats
 4. **HTTP 501 Errors**: Use `$expand` parameter (SAP services)
 
@@ -376,12 +376,7 @@ Add custom response processing:
 
 ## 13. Claude Code CLI Compatibility
 
-When using with Claude Code CLI, enable compatibility mode:
-```bash
---claude-code-friendly
-```
-
-This removes `$` prefixes from OData parameters to comply with stricter validation:
+Tool parameters never carry the `$` prefix, so they pass Claude Code's stricter validation:
 - `$filter` → `filter`
 - `$select` → `select`
 - `$expand` → `expand`

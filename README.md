@@ -330,25 +330,9 @@ The Claude Code CLI has stricter property name validation than other Claude tool
 API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"tools.17.custom.input_schema.properties: Property keys should match pattern ^[a-zA-Z0-9_.-]{1,64}$"}}
 ```
 
-Use the `--claude-code-friendly` flag to remove the `$` prefix from OData parameter names:
-
-```json
-{
-    "mcpServers": {
-        "northwind-claude-code": {
-            "command": "/usr/local/bin/odata-mcp",
-            "args": [
-                "--service",
-                "https://services.odata.org/V2/Northwind/Northwind.svc/",
-                "--claude-code-friendly",  // Removes $ from parameter names
-                "--tool-shrink"
-            ]
-        }
-    }
-}
-```
-
-This transforms parameter names:
+The bridge therefore always exposes OData parameter names without the `$` prefix
+(the former `--claude-code-friendly` flag is no longer needed; it is still
+accepted but ignored):
 - `$filter` → `filter`
 - `$select` → `select`
 - `$expand` → `expand`
@@ -357,7 +341,7 @@ This transforms parameter names:
 - `$skip` → `skip`
 - `$count` → `count`
 
-The server internally maps these friendly names back to their OData equivalents when making requests.
+The server internally maps these names back to their OData equivalents when making requests. Clients that still send `$filter` etc. keep working.
 
 #### Operation Filtering Configuration Examples
 
@@ -446,6 +430,10 @@ The OData MCP bridge supports two transport mechanisms:
 >   front (e.g. your ingress or Obot) must terminate TLS.
 >
 > Token can be any string - for dev, `--mcp-token dev` works fine.
+>
+> **No token:** `--no-mcp-token` switches the token check off on purpose, e.g. for
+> a container that only Obot reaches inside a private Docker network (do not
+> publish the port). Anyone who reaches the port can then use the server.
 
 #### Using Streamable HTTP Transport (Modern MCP Protocol)
 
@@ -716,10 +704,11 @@ The OData MCP bridge includes a flexible hint system to provide guidance for ser
 | `--http-addr` | HTTP server address (with --transport http/streamable-http) | `localhost:8080` |
 | `--mcp-token` | Authentication token for HTTP transport (required); clients send it as `X-MCP-Token` | |
 | `--mcp-token-file` | Path to file containing authentication token | |
+| `--no-mcp-token` | Run without a token (only behind a private network) | `false` |
 | `--tls` | Serve HTTPS (requires --tls-cert and --tls-key) | `false` |
 | `--tls-cert` | Path to TLS certificate file | |
 | `--tls-key` | Path to TLS key file | |
-| `--allow-all-interfaces` | Allow binding to 0.0.0.0/:: (requires --mcp-token) | `false` |
+| `--allow-all-interfaces` | Allow binding to 0.0.0.0/:: | `false` |
 | `--legacy-dates` | Enable legacy date format conversion | `true` |
 | `--no-legacy-dates` | Disable legacy date format conversion | `false` |
 | `--convert-dates-from-sap` | Convert SAP date formats in responses | `false` |
@@ -728,7 +717,6 @@ The OData MCP bridge includes a flexible hint system to provide guidance for ser
 | `--max-response-size` | Maximum response size in bytes | `5MB` |
 | `--max-items` | Maximum number of items in response | `100` |
 | `--verbose-errors` | Provide detailed error context | `false` |
-| `--claude-code-friendly, -c` | Remove $ prefix from OData parameters for Claude Code CLI compatibility | `false` |
 | `--protocol-version` | Override MCP protocol version (e.g., '2025-06-18' for AI Foundry) | `2024-11-05` |
 | `--forward-mcp-headers` | Forward HTTP headers from MCP connection to OData service (Streamable HTTP only) | `false` |
 | `--universal` | Use single universal OData tool instead of per-entity tools (reduces context for large services) | `false` |

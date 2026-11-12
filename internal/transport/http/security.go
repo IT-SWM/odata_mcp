@@ -19,13 +19,15 @@ type SecurityConfig struct {
 	TLSCert            string // Path to TLS certificate
 	TLSKey             string // Path to TLS key
 	AllowAllInterfaces bool   // Explicit flag to allow 0.0.0.0/::
+	NoToken            bool   // --no-mcp-token: accept requests without a token
 }
 
 // ValidateHTTPSecurity validates security configuration for HTTP transport.
 // Returns an error if the configuration is insecure.
 //
 // Security model:
-//   - Token is always required; every request must carry it (see RequireToken)
+//   - Token is required unless --no-mcp-token switches it off on purpose
+//     (e.g. a container only reachable from inside a private Docker network)
 //   - Binding to all interfaces (0.0.0.0/::) requires --allow-all-interfaces
 //   - TLS is optional, so a proxy in front can terminate it; --tls itself
 //     needs --tls-cert and --tls-key and then really serves HTTPS
@@ -33,8 +35,11 @@ func ValidateHTTPSecurity(cfg SecurityConfig) error {
 	if IsUnspecifiedAddr(cfg.Addr) && !cfg.AllowAllInterfaces {
 		return fmt.Errorf("binding to all interfaces (0.0.0.0/::) requires --allow-all-interfaces flag")
 	}
-	if cfg.Token == "" {
-		return fmt.Errorf("--mcp-token required for HTTP transport")
+	if cfg.NoToken && cfg.Token != "" {
+		return fmt.Errorf("--mcp-token and --no-mcp-token are mutually exclusive")
+	}
+	if cfg.Token == "" && !cfg.NoToken {
+		return fmt.Errorf("--mcp-token required for HTTP transport (or --no-mcp-token to run without one)")
 	}
 	if cfg.TLSEnabled && (cfg.TLSCert == "" || cfg.TLSKey == "") {
 		return fmt.Errorf("--tls requires --tls-cert and --tls-key")
@@ -49,7 +54,12 @@ const TokenHeader = "X-MCP-Token"
 // RequireToken rejects every request that does not carry the MCP token in
 // TokenHeader, or - when acceptBearer is set - as "Authorization: Bearer".
 // /health stays open for container and load balancer probes.
-func RequireToken(token string, acceptBearer bool, next http.Handler) http.Handler {
+// With cfg.NoToken every request passes.
+func RequireToken(cfg SecurityConfig, acceptBearer bool, next http.Handler) http.Handler {
+	if cfg.NoToken {
+		return next
+	}
+	token := cfg.Token
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			next.ServeHTTP(w, r)

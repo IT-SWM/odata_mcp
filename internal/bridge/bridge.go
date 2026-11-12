@@ -244,51 +244,18 @@ func (b *ODataMCPBridge) isFunctionModifying(function *models.FunctionImport) bo
 		httpMethod == "MERGE"
 }
 
-// getParameterName returns the parameter name based on ClaudeCodeFriendly setting
+// getParameterName returns the tool schema name of an OData query option:
+// without the "$" prefix, which some MCP clients (e.g. Claude Code) reject.
 func (b *ODataMCPBridge) getParameterName(odataParam string) string {
-	if b.config.ClaudeCodeFriendly {
-		if stripped, found := strings.CutPrefix(odataParam, "$"); found {
-			return stripped
-		}
-	}
-	return odataParam
+	return strings.TrimPrefix(odataParam, "$")
 }
 
-// mapParameterToOData maps a parameter name back to its OData equivalent
+// mapParameterToOData maps a parameter name back to its OData equivalent.
+// Names that already carry the "$" prefix pass through unchanged.
 func (b *ODataMCPBridge) mapParameterToOData(param string) string {
-	if b.config.ClaudeCodeFriendly {
-		// Map friendly names back to OData names
-		switch param {
-		case "filter":
-			return "$filter"
-		case "select":
-			return "$select"
-		case "expand":
-			return "$expand"
-		case "orderby":
-			return "$orderby"
-		case "top":
-			return "$top"
-		case "skip":
-			return "$skip"
-		case "count":
-			return "$count"
-		case "search":
-			return "$search"
-		case "format":
-			return "$format"
-		default:
-			// If it doesn't match known OData params, return as-is
-			return param
-		}
-	}
-	// If not in Claude-friendly mode, check if we need to add $ prefix
-	if !strings.HasPrefix(param, "$") && !strings.HasPrefix(param, "_") {
-		// Check if this is a known OData parameter without prefix
-		switch param {
-		case "filter", "select", "expand", "orderby", "top", "skip", "count", "search", "format":
-			return "$" + param
-		}
+	switch param {
+	case "filter", "select", "expand", "orderby", "top", "skip", "count", "search", "format":
+		return "$" + param
 	}
 	return param
 }

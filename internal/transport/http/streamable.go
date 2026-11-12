@@ -72,7 +72,7 @@ func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
 	// MCP token can only come in TokenHeader.
 	t.server = &http.Server{
 		Addr:    t.security.Addr,
-		Handler: t.addSecurityHeaders(RequireToken(t.security.Token, !t.forwardHeaders, mux)),
+		Handler: t.addSecurityHeaders(RequireToken(t.security, !t.forwardHeaders, mux)),
 	}
 
 	// Start cleanup routine for stale streams
