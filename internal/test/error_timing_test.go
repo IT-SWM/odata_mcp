@@ -172,8 +172,8 @@ func TestModifyingOperationTimeoutIsNotDoubled(t *testing.T) {
 		case <-shutdown: // test is over, let Close() proceed
 		}
 	}))
-	defer server.Close()      // runs second
-	defer close(shutdown)     // runs first, unblocks the handlers
+	defer server.Close()  // runs second
+	defer close(shutdown) // runs first, unblocks the handlers
 
 	odataClient := client.NewODataClient(server.URL, false)
 	odataClient.SetTimeout(1 * time.Second)

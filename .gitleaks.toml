@@ -26,14 +26,19 @@ tags = ["jwt", "secret"]
 
 # Allowlist
 [allowlist]
-description = "Allowlisted files"
+description = "Known false positives"
 paths = [
     '''go\.sum$''',
     '''go\.mod$''',
     '''.*_test\.go$''',
     '''test/.*''',
+    # Docs only carry placeholder credentials (PASSWORD=your_pass, ********)
+    '''.*\.md$''',
 ]
-
-# Allow test passwords
-[[allowlist.regexes]]
-regex = '''(test|example|sample|demo|dummy)'''
+regexes = [
+    '''(test|example|sample|demo|dummy)''',
+    # Go identifiers, not secrets: OData paging option, header name, variable copy
+    '''\$skiptoken''',
+    '''X-OData-Password''',
+    '''(?i)password\s*=\s*password\b''',
+]

@@ -66,4 +66,3 @@ func parseV4Response(response map[string]any) any {
 	// Otherwise return as-is
 	return response
 }
-
