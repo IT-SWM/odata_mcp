@@ -6,6 +6,7 @@ package client
 import (
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -29,11 +30,12 @@ func (c *ODataClient) buildKeyPredicate(key map[string]interface{}) string {
 		}
 	}
 
-	// Composite key
-	var parts []string
+	// Composite key, sorted by name so the URL is the same on every call
+	parts := make([]string, 0, len(key))
 	for k, v := range key {
 		parts = append(parts, fmt.Sprintf("%s=%s", k, c.formatKeyValue(v)))
 	}
+	sort.Strings(parts)
 	return strings.Join(parts, ",")
 }
 

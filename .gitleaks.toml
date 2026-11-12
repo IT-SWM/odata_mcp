@@ -5,21 +5,25 @@ title = "gitleaks config"
 
 # Additional patterns to detect
 [[rules]]
+id = "mcp-config-file"
 description = "MCP configuration files"
 path = '''(.*zmcp.*\.json|zmcp\.json)'''
 tags = ["config", "credentials"]
 
 [[rules]]
+id = "generic-api-key"
 description = "Generic API Key"
 regex = '''(?i)(api[_-]?key|apikey|api[_-]?secret|api[_-]?token)['"]?\s*[:=]\s*['"]?([a-zA-Z0-9_\-]{20,})'''
 tags = ["key", "API", "generic"]
 
 [[rules]]
+id = "generic-secret"
 description = "Generic Secret"
 regex = '''(?i)(secret|password|passwd|pwd|token|tkn)['"]?\s*[:=]\s*['"]?([a-zA-Z0-9_\-!@#$%^&*]{8,})'''
 tags = ["secret", "generic"]
 
 [[rules]]
+id = "jwt-secret"
 description = "Base64 encoded secrets"
 regex = '''(?i)(secret|password|token|key)['"]?\s*[:=]\s*['"]?(eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+)'''
 tags = ["jwt", "secret"]
