@@ -1,6 +1,7 @@
 package bridge
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -313,6 +314,43 @@ func TestUniversalToolGeneration(t *testing.T) {
 
 	if !strings.Contains(toolName, "OData") {
 		t.Errorf("Universal tool should have 'OData' in name, got %s", toolName)
+	}
+}
+
+// The universal tool must honor --entities/--functions and --enable/--disable
+// like the per-entity tools do. Denied calls fail before any OData request.
+func TestUniversalToolHonorsFilters(t *testing.T) {
+	bridge := &ODataMCPBridge{
+		config: &config.Config{
+			UniversalTool:    true,
+			AllowedEntities:  []string{"Products"},
+			AllowedFunctions: []string{"NoSuchFunction"},
+			DisableOps:       "D",
+		},
+		metadata: &models.ODataMetadata{
+			EntitySets: map[string]*models.EntitySet{
+				"Products": {Name: "Products", EntityType: "Product", Deletable: true},
+				"Orders":   {Name: "Orders", EntityType: "Order"},
+			},
+			FunctionImports: map[string]*models.FunctionImport{
+				"ReleaseOrder": {Name: "ReleaseOrder", HTTPMethod: "GET"},
+			},
+		},
+	}
+
+	tests := []struct {
+		args    map[string]any
+		wantErr string
+	}{
+		{map[string]any{"action": "list", "target": "Orders"}, "unknown target"},
+		{map[string]any{"action": "call", "target": "ReleaseOrder"}, "unknown target"},
+		{map[string]any{"action": "delete", "target": "Products", "params": map[string]any{"key": map[string]any{"ID": 1}}}, "disabled"},
+	}
+	for _, tt := range tests {
+		_, err := bridge.handleUniversalTool(context.Background(), tt.args)
+		if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+			t.Errorf("%v: got error %v, want %q", tt.args, err, tt.wantErr)
+		}
 	}
 }
 

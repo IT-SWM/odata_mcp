@@ -107,12 +107,12 @@ func init() {
 	rootCmd.Flags().String("http-addr", "localhost:8080", "HTTP server address (used with --transport http/streamable-http, defaults to localhost only for security)")
 
 	// Security options for HTTP transport
-	rootCmd.Flags().String("mcp-token", "", "Token for MCP authentication (required for HTTP transport)")
+	rootCmd.Flags().String("mcp-token", "", "Token for MCP authentication (required for HTTP transport); clients send it as X-MCP-Token header (or Authorization: Bearer without --forward-mcp-headers)")
 	rootCmd.Flags().String("mcp-token-file", "", "Path to file containing MCP token (avoids token in CLI history)")
-	rootCmd.Flags().Bool("tls", false, "Enable TLS for HTTP transport (required for non-localhost)")
+	rootCmd.Flags().Bool("tls", false, "Serve HTTPS (needs --tls-cert and --tls-key); without it a proxy in front must terminate TLS")
 	rootCmd.Flags().String("tls-cert", "", "Path to TLS certificate file")
 	rootCmd.Flags().String("tls-key", "", "Path to TLS private key file")
-	rootCmd.Flags().Bool("allow-all-interfaces", false, "Allow binding to all interfaces (0.0.0.0/::) - requires token and TLS")
+	rootCmd.Flags().Bool("allow-all-interfaces", false, "Allow binding to all interfaces (0.0.0.0/::) - requires --mcp-token")
 
 	// Debug options
 	rootCmd.Flags().Bool("trace-mcp", false, "Enable trace logging to debug MCP communication")
@@ -312,7 +312,7 @@ func runBridge(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(os.Stderr, "[VERBOSE] Header forwarding enabled - HTTP headers will be passed to OData service\n")
 			}
 		}
-		trans = http.NewStreamableHTTP(securityCfg.Addr, handler, securityCfg.Token != "", cfg.ForwardMCPHeaders)
+		trans = http.NewStreamableHTTP(securityCfg, handler, cfg.ForwardMCPHeaders)
 	case "http", "sse":
 		securityCfg, err := buildSecurityConfig(cmd)
 		if err != nil {
@@ -326,7 +326,7 @@ func runBridge(cmd *cobra.Command, args []string) error {
 		if cfg.Verbose {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Starting HTTP/SSE transport on %s\n", securityCfg.Addr)
 		}
-		trans = http.NewSSE(securityCfg.Addr, handler)
+		trans = http.NewSSE(securityCfg, handler)
 
 	case "stdio":
 		fallthrough
@@ -413,6 +413,8 @@ func validateHTTPTransport(securityCfg http.SecurityConfig) error {
 		fmt.Fprintf(os.Stderr, "Address: %s\n", securityCfg.Addr)
 		if securityCfg.TLSEnabled {
 			fmt.Fprintf(os.Stderr, "TLS: Enabled\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "TLS: off - a proxy in front must terminate TLS, or tokens and passwords cross the network in clear text\n")
 		}
 		fmt.Fprintf(os.Stderr, "Token: %s\n\n", maskToken(securityCfg.Token))
 	}

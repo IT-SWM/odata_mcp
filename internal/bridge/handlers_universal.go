@@ -174,8 +174,24 @@ func (b *ODataMCPBridge) handleUniversalTool(ctx context.Context, args map[strin
 	entitySet, isEntity := b.metadata.EntitySets[target]
 	function, isFunction := b.metadata.FunctionImports[target]
 
+	// --entities/--functions hide targets in standard mode; they must do the same here
+	if isEntity && !b.shouldIncludeEntity(target) {
+		isEntity = false
+	}
+	if isFunction && !b.shouldIncludeFunction(target) {
+		isFunction = false
+	}
 	if !isEntity && !isFunction {
 		return nil, fmt.Errorf("unknown target: %s (not an entity set or function)", target)
+	}
+
+	// --enable/--disable, same letters as the per-entity tools use
+	opType := map[string]rune{
+		"list": 'F', "count": 'F', "get": 'G', "search": 'S',
+		"create": 'C', "update": 'U', "delete": 'D', "call": 'A',
+	}
+	if op, ok := opType[action]; ok && !b.config.IsOperationEnabled(op) {
+		return nil, fmt.Errorf("%s operation is disabled on this server", action)
 	}
 
 	// Route to appropriate handler

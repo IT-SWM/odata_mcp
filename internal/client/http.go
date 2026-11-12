@@ -69,8 +69,9 @@ func (c *ODataClient) buildRequest(ctx context.Context, method, endpoint string,
 	// an Authorization header forwarded from the MCP connection identifies the
 	// actual end user, so it has to win over the configured service account
 	// (which then only covers requests made without a caller, e.g. the metadata
-	// fetch at startup).
-	if req.Header.Get(constants.Authorization) == "" && c.username != "" && c.password != "" {
+	// fetch at startup). A forwarded Cookie is the caller's login as well (SSO),
+	// so it must not get the service account's credentials attached either.
+	if req.Header.Get(constants.Authorization) == "" && req.Header.Get("Cookie") == "" && c.username != "" && c.password != "" {
 		req.SetBasicAuth(c.username, c.password)
 		if c.verbose {
 			fmt.Fprintf(os.Stderr, "[VERBOSE] Using configured basic auth\n")

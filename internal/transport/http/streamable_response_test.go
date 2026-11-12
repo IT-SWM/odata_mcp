@@ -16,9 +16,9 @@ import (
 // handler sent the answer as an SSE event and then blocked forever, so the
 // client waited out its own timeout and reported a bare cancellation.
 func TestToolsCallResponseCompletes(t *testing.T) {
-	tr := NewStreamableHTTP(":0", func(ctx context.Context, msg *transport.Message) (*transport.Message, error) {
+	tr := NewStreamableHTTP(SecurityConfig{Addr: ":0"}, func(ctx context.Context, msg *transport.Message) (*transport.Message, error) {
 		return &transport.Message{JSONRPC: "2.0", ID: msg.ID}, nil
-	}, false, false)
+	}, false)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp",
 		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"x"}}`))
@@ -49,9 +49,9 @@ func TestToolsCallThroughMCPServerHasBody(t *testing.T) {
 		return "pong", nil
 	})
 
-	tr := NewStreamableHTTP(":0", func(ctx context.Context, msg *transport.Message) (*transport.Message, error) {
+	tr := NewStreamableHTTP(SecurityConfig{Addr: ":0"}, func(ctx context.Context, msg *transport.Message) (*transport.Message, error) {
 		return srv.HandleMessage(ctx, msg)
-	}, false, false)
+	}, false)
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp",
 		strings.NewReader(`{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"ping_tool","arguments":{}}}`))

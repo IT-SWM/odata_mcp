@@ -19,12 +19,11 @@ import (
 // StreamableHTTPTransport implements the Transport interface for Streamable HTTP
 // This is the modern MCP transport that combines HTTP POST with optional SSE streaming
 type StreamableHTTPTransport struct {
-	addr           string
+	security       SecurityConfig
 	server         *http.Server
 	handler        transport.Handler
 	mu             sync.RWMutex
 	activeStreams  map[string]*streamContext
-	enableSecurity bool
 	forwardHeaders bool // Whether to forward HTTP headers to OData client
 }
 
@@ -37,12 +36,11 @@ type streamContext struct {
 }
 
 // NewStreamableHTTP creates a new Streamable HTTP transport
-func NewStreamableHTTP(addr string, handler transport.Handler, enableSecurity bool, forwardHeaders bool) *StreamableHTTPTransport {
+func NewStreamableHTTP(security SecurityConfig, handler transport.Handler, forwardHeaders bool) *StreamableHTTPTransport {
 	return &StreamableHTTPTransport{
-		addr:           addr,
+		security:       security,
 		handler:        handler,
 		activeStreams:  make(map[string]*streamContext),
-		enableSecurity: enableSecurity,
 		forwardHeaders: forwardHeaders,
 	}
 }
@@ -70,9 +68,11 @@ func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
 	// Legacy SSE endpoint for backward compatibility
 	mux.HandleFunc("/sse", t.handleLegacySSE)
 
+	// With header forwarding Authorization is the caller's OData login, so the
+	// MCP token can only come in TokenHeader.
 	t.server = &http.Server{
-		Addr:    t.addr,
-		Handler: t.addSecurityHeaders(mux),
+		Addr:    t.security.Addr,
+		Handler: t.addSecurityHeaders(RequireToken(t.security.Token, !t.forwardHeaders, mux)),
 	}
 
 	// Start cleanup routine for stale streams
@@ -80,7 +80,7 @@ func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
 
 	// Start server
 	go func() {
-		if err := t.server.ListenAndServe(); err != http.ErrServerClosed {
+		if err := listenAndServe(t.server, t.security); err != http.ErrServerClosed {
 			fmt.Printf("HTTP server error: %v\n", err)
 		}
 	}()
@@ -92,12 +92,6 @@ func (t *StreamableHTTPTransport) Start(ctx context.Context) error {
 // addSecurityHeaders adds security headers to all responses
 func (t *StreamableHTTPTransport) addSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Security check for non-localhost connections
-		if !t.enableSecurity && !isLocalhost(r.RemoteAddr) && !isLocalhost(r.Host) {
-			http.Error(w, "Remote connections require --mcp-token with --tls and --allow-all-interfaces", http.StatusForbidden)
-			return
-		}
-
 		// Add security headers
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
@@ -106,7 +100,7 @@ func (t *StreamableHTTPTransport) addSecurityHeaders(next http.Handler) http.Han
 		if isLocalhost(r.Host) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Last-Event-ID")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Last-Event-ID, "+TokenHeader)
 		}
 
 		if r.Method == "OPTIONS" {
@@ -141,6 +135,7 @@ func (t *StreamableHTTPTransport) handleMCP(w http.ResponseWriter, r *http.Reque
 	if t.forwardHeaders {
 		// Clone headers to avoid any modification issues
 		headers := r.Header.Clone()
+		headers.Del(TokenHeader) // the MCP token is ours, not the OData service's
 		ctx = context.WithValue(ctx, client.HTTPHeadersContextKey, headers)
 	}
 

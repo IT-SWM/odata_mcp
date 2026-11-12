@@ -42,6 +42,18 @@ func TestEntityKeyPredicate(t *testing.T) {
 			expectedPath: "/OrderSet(12345)",
 		},
 		{
+			name:         "Large integer key from JSON",
+			entitySet:    "OrderSet",
+			key:          map[string]interface{}{"OrderID": float64(1234567)},
+			expectedPath: "/OrderSet(1234567)",
+		},
+		{
+			name:         "String key with quote and slash",
+			entitySet:    "CustomerSet",
+			key:          map[string]interface{}{"Name": "O'Neil/A"},
+			expectedPath: "/CustomerSet('O''Neil/A')", // server sees the decoded path
+		},
+		{
 			name:         "Composite key",
 			entitySet:    "OrderItemSet",
 			key:          map[string]interface{}{"OrderID": 12345, "ItemID": "ABC"},

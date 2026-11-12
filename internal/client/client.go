@@ -93,15 +93,23 @@ func (c *ODataClient) SetCookies(cookies map[string]string) {
 	c.cookies = cookies
 }
 
-// sessionKey identifies the login a request authenticates as. The
-// Authorization header is hashed so the key never carries the credential
-// itself. Unauthenticated requests share the empty key.
+// sessionKey identifies the login a request authenticates as: its
+// Authorization header plus the Cookie header the MCP caller forwarded (an SSO
+// cookie such as MYSAPSSO2 is a login too). The forwarded cookie comes from the
+// context, not from req, because session cookies get added to req later and the
+// key must stay the same across a CSRF retry. Hashed so the key never carries
+// the credential itself. Unauthenticated requests share the empty key.
 func sessionKey(req *http.Request) string {
-	auth := req.Header.Get(constants.Authorization)
-	if auth == "" {
+	id := req.Header.Get(constants.Authorization)
+	if headers, ok := req.Context().Value(HTTPHeadersContextKey).(http.Header); ok {
+		if cookie := headers.Get("Cookie"); cookie != "" {
+			id += "\ncookie:" + cookie
+		}
+	}
+	if id == "" {
 		return ""
 	}
-	sum := sha256.Sum256([]byte(auth))
+	sum := sha256.Sum256([]byte(id))
 	return hex.EncodeToString(sum[:])
 }
 

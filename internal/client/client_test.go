@@ -86,6 +86,22 @@ func TestFormatKeyValue(t *testing.T) {
 			value:    3.14,
 			expected: "3.14",
 		},
+		{
+			// JSON numbers arrive as float64
+			name:     "Large integer from JSON",
+			value:    float64(1234567),
+			expected: "1234567",
+		},
+		{
+			name:     "String with quote",
+			value:    "O'Neil",
+			expected: "'O%27%27Neil'",
+		},
+		{
+			name:     "String with path characters",
+			value:    "A/B?C#D",
+			expected: "'A%2FB%3FC%23D'",
+		},
 	}
 
 	for _, tt := range tests {

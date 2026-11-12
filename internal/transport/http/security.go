@@ -7,6 +7,7 @@ import (
 	"crypto/subtle"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 )
 
@@ -23,42 +24,56 @@ type SecurityConfig struct {
 // ValidateHTTPSecurity validates security configuration for HTTP transport.
 // Returns an error if the configuration is insecure.
 //
-// Security model (strict by default):
-// - Token is always required unless --no-token-localhost is set for loopback addresses
-// - Non-localhost requires token + TLS, no exceptions
-// - Binding to all interfaces (0.0.0.0/::) requires explicit flag + token + TLS
+// Security model:
+//   - Token is always required; every request must carry it (see RequireToken)
+//   - Binding to all interfaces (0.0.0.0/::) requires --allow-all-interfaces
+//   - TLS is optional, so a proxy in front can terminate it; --tls itself
+//     needs --tls-cert and --tls-key and then really serves HTTPS
 func ValidateHTTPSecurity(cfg SecurityConfig) error {
-	// Check for unspecified addresses (0.0.0.0, ::, or empty host)
-	if IsUnspecifiedAddr(cfg.Addr) {
-		if !cfg.AllowAllInterfaces {
-			return fmt.Errorf("binding to all interfaces (0.0.0.0/::) requires --allow-all-interfaces flag")
-		}
-		if cfg.Token == "" {
-			return fmt.Errorf("--mcp-token required when binding to all interfaces")
-		}
-		if !cfg.TLSEnabled {
-			return fmt.Errorf("--tls required when binding to all interfaces")
-		}
-		return nil
+	if IsUnspecifiedAddr(cfg.Addr) && !cfg.AllowAllInterfaces {
+		return fmt.Errorf("binding to all interfaces (0.0.0.0/::) requires --allow-all-interfaces flag")
 	}
-
-	// Localhost bindings: token always required
-	if IsLoopbackAddr(cfg.Addr) {
-		if cfg.Token == "" {
-			return fmt.Errorf("--mcp-token required for HTTP transport")
-		}
-		return nil
-	}
-
-	// Non-localhost bindings: token + TLS required, no exceptions
 	if cfg.Token == "" {
-		return fmt.Errorf("--mcp-token required for non-localhost binding")
+		return fmt.Errorf("--mcp-token required for HTTP transport")
 	}
-	if !cfg.TLSEnabled {
-		return fmt.Errorf("--tls required for non-localhost binding")
+	if cfg.TLSEnabled && (cfg.TLSCert == "" || cfg.TLSKey == "") {
+		return fmt.Errorf("--tls requires --tls-cert and --tls-key")
 	}
-
 	return nil
+}
+
+// TokenHeader carries the --mcp-token. Not Authorization: with
+// --forward-mcp-headers that header holds the caller's OData login.
+const TokenHeader = "X-MCP-Token"
+
+// RequireToken rejects every request that does not carry the MCP token in
+// TokenHeader, or - when acceptBearer is set - as "Authorization: Bearer".
+// /health stays open for container and load balancer probes.
+func RequireToken(token string, acceptBearer bool, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		provided := r.Header.Get(TokenHeader)
+		if provided == "" && acceptBearer {
+			provided, _ = strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		}
+		// An empty token never opens the door, even if validation was bypassed.
+		if token == "" || !ValidateToken(provided, token) {
+			http.Error(w, "missing or invalid MCP token", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// listenAndServe starts srv with TLS when a certificate is configured.
+func listenAndServe(srv *http.Server, cfg SecurityConfig) error {
+	if cfg.TLSEnabled {
+		return srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
+	}
+	return srv.ListenAndServe()
 }
 
 // IsLoopbackAddr checks if an address is a loopback address (localhost/127.x.x.x/::1)

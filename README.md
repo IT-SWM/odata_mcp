@@ -437,9 +437,13 @@ The OData MCP bridge supports two transport mechanisms:
 > 🔒 **SECURITY MODEL**: HTTP transport uses a strict security model.
 >
 > **Security Requirements:**
-> - **Localhost**: Token required (`--mcp-token`)
-> - **Non-localhost**: Token + TLS required, no exceptions
-> - **All interfaces (0.0.0.0/::)**: Requires `--allow-all-interfaces` + token + TLS
+> - **Always**: Token required (`--mcp-token`). Every request except `GET /health`
+>   must send it as `X-MCP-Token: <token>`, or as `Authorization: Bearer <token>`
+>   when `--forward-mcp-headers` is off. Otherwise the server answers `401`.
+> - **All interfaces (0.0.0.0/::)**: additionally requires `--allow-all-interfaces`
+> - **TLS**: `--tls --tls-cert cert.pem --tls-key key.pem` serves HTTPS directly.
+>   Without `--tls` the server speaks plain HTTP - off localhost, a proxy in
+>   front (e.g. your ingress or Obot) must terminate TLS.
 >
 > Token can be any string - for dev, `--mcp-token dev` works fine.
 
@@ -710,12 +714,12 @@ The OData MCP bridge includes a flexible hint system to provide guidance for ser
 | `--hint` | Direct hint JSON or text from CLI | |
 | `--transport` | Transport type: 'stdio', 'http' (SSE), or 'streamable-http' | `stdio` |
 | `--http-addr` | HTTP server address (with --transport http/streamable-http) | `localhost:8080` |
-| `--mcp-token` | Authentication token for HTTP transport (required) | |
+| `--mcp-token` | Authentication token for HTTP transport (required); clients send it as `X-MCP-Token` | |
 | `--mcp-token-file` | Path to file containing authentication token | |
-| `--tls` | Enable TLS for HTTP transport | `false` |
+| `--tls` | Serve HTTPS (requires --tls-cert and --tls-key) | `false` |
 | `--tls-cert` | Path to TLS certificate file | |
 | `--tls-key` | Path to TLS key file | |
-| `--allow-all-interfaces` | Allow binding to 0.0.0.0/:: (requires --mcp-token and --tls) | `false` |
+| `--allow-all-interfaces` | Allow binding to 0.0.0.0/:: (requires --mcp-token) | `false` |
 | `--legacy-dates` | Enable legacy date format conversion | `true` |
 | `--no-legacy-dates` | Disable legacy date format conversion | `false` |
 | `--convert-dates-from-sap` | Convert SAP date formats in responses | `false` |
@@ -768,8 +772,10 @@ Notes:
   headers to forward, and the SSE transport does not forward them either.
 - The bridge has no user management of its own - the header has to come from
   the MCP client.
-- Run behind TLS and with `--mcp-token`, otherwise user credentials cross the
-  network in the clear.
+- Run behind TLS (`--tls` or a terminating proxy), otherwise user credentials
+  cross the network in the clear.
+- Send the `--mcp-token` as `X-MCP-Token` - with forwarding on, `Authorization`
+  belongs to the OData login. The bridge strips `X-MCP-Token` before forwarding.
 - If your MCP clients cannot set their own headers, the alternative that needs
   no configuration change is one container per user, each with its own
   `ODATA_USERNAME`/`ODATA_PASSWORD`.

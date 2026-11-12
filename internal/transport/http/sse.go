@@ -14,7 +14,7 @@ import (
 
 // SSETransport implements the Transport interface for Server-Sent Events
 type SSETransport struct {
-	addr     string
+	security SecurityConfig
 	server   *http.Server
 	handler  transport.Handler
 	clients  map[string]*sseClient
@@ -36,9 +36,9 @@ type clientMessage struct {
 }
 
 // NewSSE creates a new SSE transport
-func NewSSE(addr string, handler transport.Handler) *SSETransport {
+func NewSSE(security SecurityConfig, handler transport.Handler) *SSETransport {
 	return &SSETransport{
-		addr:     addr,
+		security: security,
 		handler:  handler,
 		clients:  make(map[string]*sseClient),
 		messages: make(chan *clientMessage, 100),
@@ -63,9 +63,10 @@ func (t *SSETransport) Start(ctx context.Context) error {
 		}
 	})
 
+	// This transport never forwards headers, so a Bearer token is fine here.
 	t.server = &http.Server{
-		Addr:    t.addr,
-		Handler: mux,
+		Addr:    t.security.Addr,
+		Handler: RequireToken(t.security.Token, true, mux),
 	}
 
 	// Start message processor
@@ -73,7 +74,7 @@ func (t *SSETransport) Start(ctx context.Context) error {
 
 	// Start server
 	go func() {
-		if err := t.server.ListenAndServe(); err != http.ErrServerClosed {
+		if err := listenAndServe(t.server, t.security); err != http.ErrServerClosed {
 			fmt.Printf("HTTP server error: %v\n", err)
 		}
 	}()

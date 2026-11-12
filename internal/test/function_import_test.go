@@ -57,6 +57,13 @@ func TestFunctionImportURIEncoding(t *testing.T) {
 			expectedPath:   "/UPDATE_PROGRAM",
 			expectedParams: "Program='Z%24TEST%2301'&Description='Test+%26+Demo'",
 		},
+		{
+			name:           "Quote and large number",
+			functionName:   "FIND_CUSTOMER",
+			parameters:     map[string]interface{}{"Name": "O'Neil", "Limit": float64(1234567)},
+			expectedPath:   "/FIND_CUSTOMER",
+			expectedParams: "Name='O%27%27Neil'&Limit=1234567",
+		},
 	}
 
 	for _, tt := range tests {

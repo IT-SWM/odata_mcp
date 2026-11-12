@@ -6,6 +6,7 @@ package client
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/zmcp/odata-mcp/internal/models"
@@ -43,35 +44,45 @@ func (c *ODataClient) formatKeyValue(value interface{}) string {
 		// SAP OData requires GUID values to be prefixed: guid'value'
 		return fmt.Sprintf("guid'%s'", string(v))
 	case string:
-		// For key predicates, don't URL encode the value inside quotes
-		// URL encoding happens at the full URL level
-		return fmt.Sprintf("'%s'", v)
+		return quoteKeyString(v)
 	case int, int32, int64:
 		return fmt.Sprintf("%d", v)
-	case float32, float64:
-		return fmt.Sprintf("%g", v)
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		// JSON numbers arrive as float64; %g would turn 1234567 into 1.234567e+06
+		return strconv.FormatFloat(v, 'f', -1, 64)
 	case bool:
 		return fmt.Sprintf("%t", v)
 	default:
-		return fmt.Sprintf("'%s'", fmt.Sprintf("%v", v))
+		return quoteKeyString(fmt.Sprintf("%v", v))
 	}
+}
+
+// quoteKeyString builds an OData string literal for a URL path segment: a
+// quote inside the value is doubled, and '/', '?', '#', '%' must not leak
+// into the path, so the value is path-escaped.
+func quoteKeyString(s string) string {
+	return "'" + url.PathEscape(strings.ReplaceAll(s, "'", "''")) + "'"
 }
 
 // formatFunctionParameter formats a function parameter for OData URL
 func (c *ODataClient) formatFunctionParameter(key string, value interface{}) string {
 	switch v := value.(type) {
 	case string:
-		// OData requires string parameters to be single-quoted
-		// URL encode the value but not the quotes
-		return fmt.Sprintf("%s='%s'", key, url.QueryEscape(v))
+		// OData requires string parameters to be single-quoted, with a quote
+		// inside the value doubled. URL encode the value but not the quotes.
+		return fmt.Sprintf("%s='%s'", key, url.QueryEscape(strings.ReplaceAll(v, "'", "''")))
 	case int, int32, int64:
 		return fmt.Sprintf("%s=%d", key, v)
-	case float32, float64:
-		return fmt.Sprintf("%s=%g", key, v)
+	case float32:
+		return key + "=" + strconv.FormatFloat(float64(v), 'f', -1, 32)
+	case float64:
+		return key + "=" + strconv.FormatFloat(v, 'f', -1, 64)
 	case bool:
 		return fmt.Sprintf("%s=%t", key, v)
 	default:
 		// Default to string representation with quotes
-		return fmt.Sprintf("%s='%s'", key, url.QueryEscape(fmt.Sprintf("%v", v)))
+		return fmt.Sprintf("%s='%s'", key, url.QueryEscape(strings.ReplaceAll(fmt.Sprintf("%v", v), "'", "''")))
 	}
 }

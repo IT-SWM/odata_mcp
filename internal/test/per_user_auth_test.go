@@ -83,6 +83,62 @@ func TestUsernamePasswordHeadersBuildBasicAuth(t *testing.T) {
 	assert.False(t, sawRawHeaders, "raw username/password headers must not reach the OData service")
 }
 
+// TestCookieLoginsGetOwnSession covers callers that log in with a forwarded SSO
+// cookie instead of an Authorization header: each must get its own SAP session,
+// and none may get the configured service account attached.
+func TestCookieLoginsGetOwnSession(t *testing.T) {
+	type modifyCall struct {
+		basicUser string
+		sessionID string
+	}
+	var mu sync.Mutex
+	var calls []modifyCall
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sso, _ := r.Cookie("MYSAPSSO2")
+		if r.Header.Get(constants.CSRFTokenHeader) == constants.CSRFTokenFetch {
+			w.Header().Set(constants.CSRFTokenHeader, "token-for-"+sso.Value)
+			http.SetCookie(w, &http.Cookie{Name: "SAP_SESSIONID", Value: "session-for-" + sso.Value})
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == http.MethodPost {
+			user, _, _ := r.BasicAuth()
+			session := ""
+			if c, err := r.Cookie("SAP_SESSIONID"); err == nil {
+				session = c.Value
+			}
+			mu.Lock()
+			calls = append(calls, modifyCall{basicUser: user, sessionID: session})
+			mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]interface{}{"d": map[string]interface{}{"ID": "1"}})
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "{}")
+	}))
+	defer server.Close()
+
+	c := client.NewODataClient(server.URL, false)
+	c.SetBasicAuth("svcuser", "svcpass")
+
+	for _, user := range []string{"alice", "bob"} {
+		headers := http.Header{}
+		headers.Set("Cookie", "MYSAPSSO2="+user)
+		ctx := context.WithValue(context.Background(), client.HTTPHeadersContextKey, headers)
+		_, err := c.CreateEntity(ctx, "TestEntities", map[string]interface{}{"Name": user})
+		require.NoError(t, err)
+	}
+
+	require.Len(t, calls, 2)
+	for i, want := range []string{"alice", "bob"} {
+		assert.Empty(t, calls[i].basicUser, "%s logged in by cookie, service account must not be attached", want)
+		assert.Equal(t, "session-for-"+want, calls[i].sessionID, "%s must get their own SAP session", want)
+	}
+}
+
 // TestSessionStateIsPerIdentity covers the isolation the shared client used to
 // break: a CSRF token and the session cookie it was issued with belong to one
 // login and must never travel with another user's request.

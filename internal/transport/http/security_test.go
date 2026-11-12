@@ -4,6 +4,8 @@
 package http
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,15 +65,26 @@ func TestValidateHTTPSecurity(t *testing.T) {
 			errContains: "mcp-token required",
 		},
 
-		// Non-localhost with token but no TLS - rejected
+		// Non-localhost with token but no TLS - allowed, a proxy terminates TLS
 		{
-			name: "192.168.1.100:8080 with token but no TLS - rejected",
+			name: "192.168.1.100:8080 with token but no TLS - allowed",
 			config: SecurityConfig{
 				Addr:  "192.168.1.100:8080",
 				Token: "secret-token",
 			},
+			wantErr: false,
+		},
+
+		// --tls without certificate - rejected, it would serve plain HTTP
+		{
+			name: "--tls without cert and key - rejected",
+			config: SecurityConfig{
+				Addr:       "192.168.1.100:8080",
+				Token:      "secret-token",
+				TLSEnabled: true,
+			},
 			wantErr:     true,
-			errContains: "tls required",
+			errContains: "--tls-cert",
 		},
 
 		// Non-localhost with token and TLS - allowed
@@ -108,16 +121,15 @@ func TestValidateHTTPSecurity(t *testing.T) {
 			errContains: "mcp-token required",
 		},
 
-		// 0.0.0.0 with flag and token but no TLS - rejected
+		// 0.0.0.0 with flag and token but no TLS - allowed, a proxy terminates TLS
 		{
-			name: "0.0.0.0:8080 with flag and token but no TLS - rejected",
+			name: "0.0.0.0:8080 with flag and token but no TLS - allowed",
 			config: SecurityConfig{
 				Addr:               "0.0.0.0:8080",
 				AllowAllInterfaces: true,
 				Token:              "secret-token",
 			},
-			wantErr:     true,
-			errContains: "tls required",
+			wantErr: false,
 		},
 
 		// 0.0.0.0 with all requirements - allowed
@@ -166,6 +178,41 @@ func TestValidateHTTPSecurity(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
+		})
+	}
+}
+
+// TestRequireToken checks that the MCP token is enforced on every request.
+func TestRequireToken(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+
+	tests := []struct {
+		name         string
+		token        string
+		acceptBearer bool
+		path         string
+		headers      map[string]string
+		want         int
+	}{
+		{"no token sent", "secret", true, "/mcp", nil, http.StatusUnauthorized},
+		{"wrong token", "secret", true, "/mcp", map[string]string{TokenHeader: "nope"}, http.StatusUnauthorized},
+		{"token header", "secret", false, "/mcp", map[string]string{TokenHeader: "secret"}, http.StatusOK},
+		{"bearer accepted", "secret", true, "/mcp", map[string]string{"Authorization": "Bearer secret"}, http.StatusOK},
+		// With header forwarding, Authorization is the caller's OData login.
+		{"bearer ignored when forwarding", "secret", false, "/mcp", map[string]string{"Authorization": "Bearer secret"}, http.StatusUnauthorized},
+		{"empty server token never matches", "", true, "/mcp", nil, http.StatusUnauthorized},
+		{"health stays open", "secret", true, "/health", nil, http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
+			for k, v := range tt.headers {
+				req.Header.Set(k, v)
+			}
+			rec := httptest.NewRecorder()
+			RequireToken(tt.token, tt.acceptBearer, ok).ServeHTTP(rec, req)
+			assert.Equal(t, tt.want, rec.Code)
 		})
 	}
 }
