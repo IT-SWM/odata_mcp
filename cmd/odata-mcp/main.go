@@ -29,8 +29,9 @@ import (
 var cfg *config.Config
 
 var rootCmd = &cobra.Command{
-	Use:   "odata-mcp [service-url]",
-	Short: "OData to MCP Bridge - Universal OData v2 to Model Context Protocol bridge",
+	Use:     "odata-mcp [service-url]",
+	Version: constants.MCPServerVersion,
+	Short:   "OData to MCP Bridge - Universal OData v2 to Model Context Protocol bridge",
 	Long: `OData to MCP Bridge - Universal OData v2 to Model Context Protocol bridge.
 
 This tool creates a bridge between OData v2 services and the Model Context Protocol

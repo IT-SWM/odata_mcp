@@ -27,14 +27,18 @@ tags = ["jwt", "secret"]
 # Allowlist
 [allowlist]
 description = "Known false positives"
+# Match the regexes below against the whole finding, not only its first group
+regexTarget = "match"
 paths = [
     '''go\.sum$''',
     '''go\.mod$''',
     '''.*_test\.go$''',
     '''test/.*''',
-    # Docs only carry placeholder credentials (PASSWORD=your_pass, ********)
+    # Docs only carry placeholder credentials
     '''.*\.md$''',
 ]
+# This commit put a placeholder password into a comment of this file
+commits = ["f54eeffa0ad672b963bfa1b336f226a6a8b0c589"]
 regexes = [
     '''(test|example|sample|demo|dummy)''',
     # Go identifiers, not secrets: OData paging option, header name, variable copy
